@@ -24,8 +24,8 @@ database.exec(`
   )
 `);
 
-const existingUsers = database.prepare("SELECT COUNT(*) AS count FROM users").get();
-if (existingUsers.count === 0) {
+const userCount = database.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+if (userCount === 0) {
   if (process.env.NODE_ENV === "production" && !process.env.ADMIN_PASSWORD) {
     throw new Error("Set ADMIN_PASSWORD before starting with an empty production database.");
   }
@@ -37,11 +37,10 @@ if (existingUsers.count === 0) {
   database.prepare(
     "INSERT INTO users (email, password_hash, salt, role) VALUES (?, ?, ?, 'admin')",
   ).run(email, passwordHash, salt);
-
-  console.log("Created the initial local admin account:");
+  console.log("Created initial admin account:");
   console.log(`  Email: ${email}`);
   console.log(`  Password: ${password}`);
-  console.log("Save this password; it will not be printed again.");
+  console.log("Save this password; it is shown only once.");
 }
 
 const tokenSecret = process.env.AUTH_SECRET || randomBytes(32).toString("hex");
@@ -79,7 +78,7 @@ function createToken(user) {
     sub: user.id,
     email: user.email,
     role: user.role,
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 8,
+    exp: Math.floor(Date.now() / 1000) + 8 * 60 * 60,
   })).toString("base64url");
   const signature = createHmac("sha256", tokenSecret)
     .update(`${header}.${payload}`)
@@ -119,7 +118,6 @@ const server = createServer(async (request, response) => {
       const user = database.prepare(
         "SELECT id, email, password_hash, salt, role FROM users WHERE email = ?",
       ).get(email.trim().toLowerCase());
-
       if (!user) {
         sendJson(response, 401, { message: "Invalid email or password." });
         return;
